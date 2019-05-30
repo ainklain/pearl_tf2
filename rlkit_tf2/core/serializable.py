@@ -1,6 +1,5 @@
 """
 Based on rllab's serializable.py file
-
 https://github.com/rll/rllab
 """
 

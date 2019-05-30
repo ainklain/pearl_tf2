@@ -18,15 +18,12 @@ class PathBuilder(dict):
         next_observations=6,
         ...
     )
-
     path = path_builder.get_all_stacked()
-
     path['observations']
     # output: [1, 4]
     path['actions']
     # output: [2, 5]
     ```
-
     Note that the key should be "actions" and not "action" since the
     resulting dictionary will have those keys.
     """

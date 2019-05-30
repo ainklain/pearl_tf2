@@ -52,7 +52,9 @@ class MLPBlock(layers.Layer):
                  output_size,
                  init_w=3e-3,
                  hidden_activation='relu',
-                 output_activation='linear'):
+                 output_activation='linear',
+                 hidden_init=tfu.fanin_init,
+                 b_init_value=0.1):
         super().__init__()
         self.hidden_layers = list()
         for i, h in enumerate(hidden_sizes):

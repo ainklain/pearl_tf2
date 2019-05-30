@@ -1,4 +1,6 @@
-from myrl.distribution.base import Distribution
+# from myrl.distribution.base import Distribution
+import tensorflow_probability.python.distributions as tfd
+from tensorflow_probability.python.distributions import Distribution, Normal
 
 import numpy as np
 import tensorflow as tf
@@ -98,11 +100,11 @@ class TanhNormal(Distribution):
         self.epsilon = epsilon
 
     def sample_n(self, n, return_pre_tanh_value=False):
-        z = self.normal.sample_n(n)
+        z = self.normal.sample(n)
         if return_pre_tanh_value:
-            return torch.tanh(z), z
+            return tf.math.tanh(z), z
         else:
-            return torch.tanh(z)
+            return tf.math.tanh(z)
 
     def log_prob(self, value, pre_tanh_value=None):
         """
@@ -112,10 +114,10 @@ class TanhNormal(Distribution):
         :return:
         """
         if pre_tanh_value is None:
-            pre_tanh_value = torch.log(
+            pre_tanh_value = tf.math.log(
                 (1+value) / (1-value)
             ) / 2
-        return self.normal.log_prob(pre_tanh_value) - torch.log(
+        return self.normal.log_prob(pre_tanh_value) - tf.math.log(
             1 - value * value + self.epsilon
         )
 
@@ -125,12 +127,12 @@ class TanhNormal(Distribution):
 
         See https://github.com/pytorch/pytorch/issues/4620 for discussion.
         """
-        z = self.normal.sample().detach()
+        z = self.normal.sample()
 
         if return_pretanh_value:
-            return torch.tanh(z), z
+            return tf.math.tanh(z), z
         else:
-            return torch.tanh(z)
+            return tf.math.tanh(z)
 
     def rsample(self, return_pretanh_value=False):
         """
@@ -140,15 +142,14 @@ class TanhNormal(Distribution):
             self.normal_mean +
             self.normal_std *
             Normal(
-                ptu.zeros(self.normal_mean.size()),
-                ptu.ones(self.normal_std.size())
+                tf.zeros_like(self.normal_mean),
+                tf.ones_like(self.normal_std)
             ).sample()
         )
-        z.requires_grad_()
 
         if return_pretanh_value:
-            return torch.tanh(z), z
+            return tf.math.tanh(z), z
         else:
-            return torch.tanh(z)
+            return tf.math.tanh(z)
 
 

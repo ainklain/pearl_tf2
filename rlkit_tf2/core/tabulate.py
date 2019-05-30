@@ -197,11 +197,9 @@ _invisible_codes_bytes = re.compile(b"\x1b\[\d*m")  # ANSI color codes
 
 def simple_separated_format(separator):
     """Construct a simple TableFormat with columns separated by a separator.
-
     >>> tsv = simple_separated_format("\\t") ; \
         tabulate([["foo", 1], ["spam", 23]], tablefmt=tsv) == 'foo \\t 1\\nspam\\t23'
     True
-
     """
     return TableFormat(None, None, None, None,
                        headerrow=DataRow('', separator, ''),
@@ -243,7 +241,6 @@ def _isint(string):
 
 def _type(string, has_invisible=True):
     """The least generic type (type(None), int, float, str, unicode).
-
     >>> _type(None) is type(None)
     True
     >>> _type("foo") is type("")
@@ -254,7 +251,6 @@ def _type(string, has_invisible=True):
     True
     >>> _type('\x1b[31m42\x1b[0m') is type(42)
     True
-
     """
 
     if has_invisible and \
@@ -277,7 +273,6 @@ def _type(string, has_invisible=True):
 
 def _afterpoint(string):
     """Symbols after a decimal point, -1 if the string lacks the decimal point.
-
     >>> _afterpoint("123.45")
     2
     >>> _afterpoint("1001")
@@ -286,7 +281,6 @@ def _afterpoint(string):
     -1
     >>> _afterpoint("123e45")
     2
-
     """
     if _isnumber(string):
         if _isint(string):
@@ -304,10 +298,8 @@ def _afterpoint(string):
 
 def _padleft(width, s, has_invisible=True):
     """Flush right.
-
     >>> _padleft(6, '\u044f\u0439\u0446\u0430') == '  \u044f\u0439\u0446\u0430'
     True
-
     """
     iwidth = width + len(s) - len(_strip_invisible(s)) if has_invisible else width
     fmt = "{0:>%ds}" % iwidth
@@ -316,10 +308,8 @@ def _padleft(width, s, has_invisible=True):
 
 def _padright(width, s, has_invisible=True):
     """Flush left.
-
     >>> _padright(6, '\u044f\u0439\u0446\u0430') == '\u044f\u0439\u0446\u0430  '
     True
-
     """
     iwidth = width + len(s) - len(_strip_invisible(s)) if has_invisible else width
     fmt = "{0:<%ds}" % iwidth
@@ -328,10 +318,8 @@ def _padright(width, s, has_invisible=True):
 
 def _padboth(width, s, has_invisible=True):
     """Center string.
-
     >>> _padboth(6, '\u044f\u0439\u0446\u0430') == ' \u044f\u0439\u0446\u0430 '
     True
-
     """
     iwidth = width + len(s) - len(_strip_invisible(s)) if has_invisible else width
     fmt = "{0:^%ds}" % iwidth
@@ -348,10 +336,8 @@ def _strip_invisible(s):
 
 def _visible_width(s):
     """Visible width of a printed string. ANSI color codes are removed.
-
     >>> _visible_width('\x1b[31mhello\x1b[0m'), _visible_width("world")
     (5, 5)
-
     """
     if isinstance(s, _text_type) or isinstance(s, _binary_type):
         return len(_strip_invisible(s))
@@ -361,13 +347,10 @@ def _visible_width(s):
 
 def _align_column(strings, alignment, minwidth=0, has_invisible=True):
     """[string] -> [padded_string]
-
     >>> list(map(str,_align_column(["12.345", "-1234.5", "1.23", "1234.5", "1e+234", "1.0e234"], "decimal")))
     ['   12.345  ', '-1234.5    ', '    1.23   ', ' 1234.5    ', '    1e+234 ', '    1.0e234']
-
     >>> list(map(str,_align_column(['123.4', '56.7890'], None)))
     ['123.4', '56.7890']
-
     """
     if alignment == "right":
         strings = [s.strip() for s in strings]
@@ -406,7 +389,6 @@ def _more_generic(type1, type2):
 
 def _column_type(strings, has_invisible=True):
     """The least generic type all column values are convertible to.
-
     >>> _column_type(["1", "2"]) is _int_type
     True
     >>> _column_type(["1", "2.3"]) is _float_type
@@ -422,7 +404,6 @@ def _column_type(strings, has_invisible=True):
     >>> import datetime as dt
     >>> _column_type([dt.datetime(1991,2,19), dt.time(17,35)]) is _text_type
     True
-
     """
     types = [_type(s, has_invisible) for s in strings ]
     return reduce(_more_generic, types, int)
@@ -430,15 +411,12 @@ def _column_type(strings, has_invisible=True):
 
 def _format(val, valtype, floatfmt, missingval=""):
     """Format a value accoding to its type.
-
     Unicode is supported:
-
     >>> hrow = ['\u0431\u0443\u043a\u0432\u0430', '\u0446\u0438\u0444\u0440\u0430'] ; \
         tbl = [['\u0430\u0437', 2], ['\u0431\u0443\u043a\u0438', 4]] ; \
         good_result = '\\u0431\\u0443\\u043a\\u0432\\u0430      \\u0446\\u0438\\u0444\\u0440\\u0430\\n-------  -------\\n\\u0430\\u0437             2\\n\\u0431\\u0443\\u043a\\u0438           4' ; \
         tabulate(tbl, headers=hrow) == good_result
     True
-
     """
     if val is None:
         return missingval
@@ -466,24 +444,15 @@ def _align_header(header, alignment, width):
 
 def _normalize_tabular_data(tabular_data, headers):
     """Transform a supported data type to a list of lists, and a list of headers.
-
     Supported tabular data types:
-
     * list-of-lists or another iterable of iterables
-
     * list of named tuples (usually used with headers="keys")
-
     * 2D NumPy arrays
-
     * NumPy record arrays (usually used with headers="keys")
-
     * dict of iterables (usually used with headers="keys")
-
     * pandas.DataFrame (usually used with headers="keys")
-
     The first row can be used as headers if headers="firstrow",
     column indices can be used as headers if headers="keys".
-
     """
 
     if hasattr(tabular_data, "keys") and hasattr(tabular_data, "values"):
@@ -542,62 +511,45 @@ def tabulate(tabular_data, headers=[], tablefmt="simple",
              floatfmt="g", numalign="decimal", stralign="left",
              missingval=""):
     """Format a fixed width table for pretty printing.
-
     >>> print(tabulate([[1, 2.34], [-56, "8.999"], ["2", "10001"]]))
     ---  ---------
       1      2.34
     -56      8.999
       2  10001
     ---  ---------
-
     The first required argument (`tabular_data`) can be a
     list-of-lists (or another iterable of iterables), a list of named
     tuples, a dictionary of iterables, a two-dimensional NumPy array,
     NumPy record array, or a Pandas' dataframe.
-
-
     Table headers
     -------------
-
     To print nice column headers, supply the second argument (`headers`):
-
       - `headers` can be an explicit list of column headers
       - if `headers="firstrow"`, then the first row of data is used
       - if `headers="keys"`, then dictionary keys or column indices are used
-
     Otherwise a headerless table is produced.
-
     If the number of headers is less than the number of columns, they
     are supposed to be names of the last columns. This is consistent
     with the plain-text format of R and Pandas' dataframes.
-
     >>> print(tabulate([["sex","age"],["Alice","F",24],["Bob","M",19]],
     ...       headers="firstrow"))
            sex      age
     -----  -----  -----
     Alice  F         24
     Bob    M         19
-
-
     Column alignment
     ----------------
-
     `tabulate` tries to detect column types automatically, and aligns
     the values properly. By default it aligns decimal points of the
     numbers (or flushes integer numbers to the right), and flushes
     everything else to the left. Possible column alignments
     (`numalign`, `stralign`) are: "right", "center", "left", "decimal"
     (only for `numalign`), and None (to disable alignment).
-
-
     Table formats
     -------------
-
     `floatfmt` is a format specification used for columns which
     contain numeric data with a decimal point.
-
     `None` values are replaced with a `missingval` string:
-
     >>> print(tabulate([["spam", 1, None],
     ...                 ["eggs", 42, 3.14],
     ...                 ["other", None, 2.7]], missingval="?"))
@@ -606,43 +558,34 @@ def tabulate(tabular_data, headers=[], tablefmt="simple",
     eggs   42  3.14
     other   ?  2.7
     -----  --  ----
-
     Various plain-text table formats (`tablefmt`) are supported:
     'plain', 'simple', 'grid', 'pipe', 'orgtbl', 'rst', 'mediawiki',
     and 'latex'. Variable `tabulate_formats` contains the list of
     currently supported formats.
-
     "plain" format doesn't use any pseudographics to draw tables,
     it separates columns with a double space:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]],
     ...                 ["strings", "numbers"], "plain"))
     strings      numbers
     spam         41.9999
     eggs        451
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="plain"))
     spam   41.9999
     eggs  451
-
     "simple" format is like Pandoc simple_tables:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]],
     ...                 ["strings", "numbers"], "simple"))
     strings      numbers
     ---------  ---------
     spam         41.9999
     eggs        451
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="simple"))
     ----  --------
     spam   41.9999
     eggs  451
     ----  --------
-
     "grid" is similar to tables produced by Emacs table.el package or
     Pandoc grid_tables:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]],
     ...                ["strings", "numbers"], "grid"))
     +-----------+-----------+
@@ -652,49 +595,39 @@ def tabulate(tabular_data, headers=[], tablefmt="simple",
     +-----------+-----------+
     | eggs      |  451      |
     +-----------+-----------+
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="grid"))
     +------+----------+
     | spam |  41.9999 |
     +------+----------+
     | eggs | 451      |
     +------+----------+
-
     "pipe" is like tables in PHP Markdown Extra extension or Pandoc
     pipe_tables:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]],
     ...                ["strings", "numbers"], "pipe"))
     | strings   |   numbers |
     |:----------|----------:|
     | spam      |   41.9999 |
     | eggs      |  451      |
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="pipe"))
     |:-----|---------:|
     | spam |  41.9999 |
     | eggs | 451      |
-
     "orgtbl" is like tables in Emacs org-mode and orgtbl-mode. They
     are slightly different from "pipe" format by not using colons to
     define column alignment, and using a "+" sign to indicate line
     intersections:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]],
     ...                ["strings", "numbers"], "orgtbl"))
     | strings   |   numbers |
     |-----------+-----------|
     | spam      |   41.9999 |
     | eggs      |  451      |
-
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="orgtbl"))
     | spam |  41.9999 |
     | eggs | 451      |
-
     "rst" is like a simple table format from reStructuredText; please
     note that reStructuredText accepts also "grid" tables:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]],
     ...                ["strings", "numbers"], "rst"))
     =========  =========
@@ -703,16 +636,13 @@ def tabulate(tabular_data, headers=[], tablefmt="simple",
     spam         41.9999
     eggs        451
     =========  =========
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="rst"))
     ====  ========
     spam   41.9999
     eggs  451
     ====  ========
-
     "mediawiki" produces a table markup used in Wikipedia and on other
     MediaWiki-based sites:
-
     >>> print(tabulate([["strings", "numbers"], ["spam", 41.9999], ["eggs", "451.0"]],
     ...                headers="firstrow", tablefmt="mediawiki"))
     {| class="wikitable" style="text-align: left;"
@@ -724,9 +654,7 @@ def tabulate(tabular_data, headers=[], tablefmt="simple",
     |-
     | eggs      || align="right"|  451
     |}
-
     "latex" produces a tabular environment of LaTeX document markup:
-
     >>> print(tabulate([["spam", 41.9999], ["eggs", "451.0"]], tablefmt="latex"))
     \\begin{tabular}{lr}
     \\hline
@@ -734,7 +662,6 @@ def tabulate(tabular_data, headers=[], tablefmt="simple",
      eggs & 451      \\\\
     \\hline
     \\end{tabular}
-
     """
 
     list_of_lists, headers = _normalize_tabular_data(tabular_data, headers)

@@ -276,6 +276,12 @@ class Logger(object):
         del self._prefixes[-1]
         self._prefix_str = ''.join(self._prefixes)
 
+    # def save_weights(weights, names):
+    #     ''' save network weights to given paths '''
+    #     # NOTE: breaking abstraction by adding torch dependence here
+    #     for w, n in zip(weights, names):
+    #         torch.save(w, n)
+
     def save_itr_params(self, itr, params):
         if self._snapshot_dir:
             if self._snapshot_mode == 'all':

@@ -1,15 +1,15 @@
 import numpy as np
 
-from rlkit.envs.mujoco_env import MujocoEnv
+from rlkit_tf2.envs.mujoco_env import MujocoEnv
 
 
 class AntEnv(MujocoEnv):
-    def __init__(self, use_low_gear_ratio=True):
-        self.init_serialization(locals())
+    def __init__(self, use_low_gear_ratio=False):
+        # self.init_serialization(locals())
         if use_low_gear_ratio:
             xml_path = 'low_gear_ratio_ant.xml'
         else:
-            xml_path = 'normal_gear_ratio_ant.xml'
+            xml_path = 'ant.xml'
         super().__init__(
             xml_path,
             frame_skip=5,
@@ -22,10 +22,10 @@ class AntEnv(MujocoEnv):
         torso_xyz_after = self.get_body_com("torso")
         torso_velocity = torso_xyz_after - torso_xyz_before
         forward_reward = torso_velocity[0]/self.dt
-        ctrl_cost = .5 * np.square(a).sum()
+        ctrl_cost = 0. # .5 * np.square(a).sum()
         contact_cost = 0.5 * 1e-3 * np.sum(
             np.square(np.clip(self.sim.data.cfrc_ext, -1, 1)))
-        survive_reward = 1.0
+        survive_reward = 0. # 1.0
         reward = forward_reward - ctrl_cost - contact_cost + survive_reward
         state = self.state_vector()
         notdone = np.isfinite(state).all() \
@@ -41,6 +41,8 @@ class AntEnv(MujocoEnv):
         )
 
     def _get_obs(self):
+        # this is gym ant obs, should use rllab?
+        # if position is needed, override this in subclasses
         return np.concatenate([
             self.sim.data.qpos.flat[2:],
             self.sim.data.qvel.flat,

@@ -1,7 +1,8 @@
-from rlkit.policies.base import Policy
+
+from rlkit_tf2.policies.base import SerializablePolicy
 
 
-class RandomPolicy(Policy):
+class RandomPolicy(SerializablePolicy):
     """
     Policy that always outputs zero.
     """

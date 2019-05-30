@@ -1,24 +1,56 @@
 """
 General networks for pytorch.
-
 Algorithm-specific networks should go else-where.
 """
 import tensorflow as tf
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense
+import tensorflow.keras.layers as layers
+from tensorflow.keras.layers import Dense, LayerNormalization
 
 from rlkit_tf2.policies.base import Policy
-from rlkit_tf2.torch import pytorch_util as ptu
-from rlkit_tf2.torch.core import eval_np
-from rlkit_tf2.torch.data_management.normalizer import TorchFixedNormalizer
-from rlkit_tf2.torch.modules import LayerNorm
+from rlkit_tf2.tf2 import tf2_util as tfu
+from rlkit_tf2.tf2.core import TF2Module
+from rlkit_tf2.tf2.data_management.normalizer import TorchFixedNormalizer
+# from rlkit_tf2.tf2.modules import LayerNorm
 
 
 def identity(x):
     return x
 
 
-class Mlp(Model):
+class MLPBlock(layers.Layer):
+    def __init__(self,
+                 hidden_sizes,
+                 output_size,
+                 init_w=3e-3,
+                 hidden_activation='relu',
+                 output_activation='linear',
+                 hidden_init=tfu.fanin_init,
+                 b_init_value=0.1,
+                 layer_norm=False,
+                 layer_norm_kwargs=None,
+                 ):
+        super().__init__()
+        self.hidden_layers = list()
+        for i, h in enumerate(hidden_sizes):
+            self.hidden_layers.append(Dense(h, activation=hidden_activation))
+        self.output_layer = Dense(output_size,
+                                   activation=output_activation,
+                                   kernel_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w),
+                                   bias_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w))
+
+    def call(self, inputs, output_layer=True):
+        x = self.hidden_layers[0](inputs)
+        if len(self.hidden_layers) > 1:
+            for i in range(1, len(self.hidden_layers)):
+                x = self.hidden_layers[i](x)
+
+        if output_layer:
+            return self.output_layer(x)
+        else:
+            return x
+
+
+class Mlp(TF2Module):
     def __init__(
             self,
             hidden_sizes,
@@ -32,6 +64,7 @@ class Mlp(Model):
             layer_norm=False,
             layer_norm_kwargs=None,
     ):
+        self.save_init_params(locals())
         super().__init__()
 
         if layer_norm_kwargs is None:
@@ -39,6 +72,7 @@ class Mlp(Model):
 
         self.input_size = input_size
         self.output_size = output_size
+        self.hidden_sizes = hidden_sizes
         self.hidden_activation = hidden_activation
         self.output_activation = output_activation
         self.layer_norm = layer_norm
@@ -80,7 +114,7 @@ class Mlp(Model):
 
 class FlattenMlp(Mlp):
     """
-    Flatten inputs along dimension 1 and then pass through MLP.
+    if there are multiple inputs, concatenate along dim 1
     """
 
     def forward(self, *inputs, **kwargs):
@@ -99,6 +133,7 @@ class MlpPolicy(Mlp, Policy):
             obs_normalizer: TorchFixedNormalizer = None,
             **kwargs
     ):
+        self.save_init_params(locals())
         super().__init__(*args, **kwargs)
         self.obs_normalizer = obs_normalizer
 
@@ -112,7 +147,7 @@ class MlpPolicy(Mlp, Policy):
         return actions[0, :], {}
 
     def get_actions(self, obs):
-        return eval_np(self, obs)
+        return self.eval_np(obs)
 
 
 class TanhMlpPolicy(MlpPolicy):
@@ -120,4 +155,60 @@ class TanhMlpPolicy(MlpPolicy):
     A helper class since most policies have a tanh output activation.
     """
     def __init__(self, *args, **kwargs):
+        self.save_init_params(locals())
         super().__init__(*args, output_activation=torch.tanh, **kwargs)
+
+
+class MlpEncoder(FlattenMlp):
+    '''
+    encode context via MLP
+    '''
+
+    def reset(self, num_tasks=1):
+        pass
+
+
+class RecurrentEncoder(FlattenMlp):
+    '''
+    encode context via recurrent network
+    '''
+
+    def __init__(self,
+                 *args,
+                 **kwargs
+    ):
+        self.save_init_params(locals())
+        super().__init__(*args, **kwargs)
+        self.hidden_dim = self.hidden_sizes[-1]
+        self.register_buffer('hidden', torch.zeros(1, 1, self.hidden_dim))
+
+        # input should be (task, seq, feat) and hidden should be (task, 1, feat)
+
+        self.lstm = nn.LSTM(self.hidden_dim, self.hidden_dim, num_layers=1, batch_first=True)
+
+    def forward(self, in_, return_preactivations=False):
+        # expects inputs of dimension (task, seq, feat)
+        task, seq, feat = in_.size()
+        out = in_.view(task * seq, feat)
+
+        # embed with MLP
+        for i, fc in enumerate(self.fcs):
+            out = fc(out)
+            out = self.hidden_activation(out)
+
+        out = out.view(task, seq, -1)
+        out, (hn, cn) = self.lstm(out, (self.hidden, torch.zeros(self.hidden.size()).to(ptu.device)))
+        self.hidden = hn
+        # take the last hidden state to predict z
+        out = out[:, -1, :]
+
+        # output layer
+        preactivation = self.last_fc(out)
+        output = self.output_activation(preactivation)
+        if return_preactivations:
+            return output, preactivation
+        else:
+            return output
+
+    def reset(self, num_tasks=1):
+        self.hidden = self.hidden.new_full((1, num_tasks, self.hidden_dim), 0)

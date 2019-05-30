@@ -5,7 +5,7 @@ import mujoco_py
 import numpy as np
 from gym.envs.mujoco import mujoco_env
 
-from rlkit.core.serializable import Serializable
+from rlkit_tf2.core.serializable import Serializable
 
 ENV_ASSET_DIR = os.path.join(os.path.dirname(__file__), 'assets')
 
@@ -13,7 +13,6 @@ ENV_ASSET_DIR = os.path.join(os.path.dirname(__file__), 'assets')
 class MujocoEnv(mujoco_env.MujocoEnv, Serializable):
     """
     My own wrapper around MujocoEnv.
-
     The caller needs to declare
     """
     def __init__(

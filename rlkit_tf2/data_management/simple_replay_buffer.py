@@ -1,18 +1,11 @@
-from collections import OrderedDict
-
 import numpy as np
 
-from rlkit.data_management.replay_buffer import ReplayBuffer
+from rlkit_tf2.data_management.replay_buffer import ReplayBuffer
 
 
 class SimpleReplayBuffer(ReplayBuffer):
-
     def __init__(
-        self,
-        max_replay_buffer_size,
-        observation_dim,
-        action_dim,
-        env_info_sizes,
+            self, max_replay_buffer_size, observation_dim, action_dim,
     ):
         self._observation_dim = observation_dim
         self._action_dim = action_dim
@@ -26,68 +19,70 @@ class SimpleReplayBuffer(ReplayBuffer):
         # Make everything a 2D np array to make it easier for other code to
         # reason about the shape of the data
         self._rewards = np.zeros((max_replay_buffer_size, 1))
+        self._sparse_rewards = np.zeros((max_replay_buffer_size, 1))
         # self._terminals[i] = a terminal was received at time i
         self._terminals = np.zeros((max_replay_buffer_size, 1), dtype='uint8')
-        # Define self._env_infos[key][i] to be the return value of env_info[key]
-        # at time i
-        self._env_infos = {}
-        for key, size in env_info_sizes.items():
-            self._env_infos[key] = np.zeros((max_replay_buffer_size, size))
-        self._env_info_keys = env_info_sizes.keys()
+        self.clear()
 
-        self._top = 0
-        self._size = 0
-
-    def add_sample(self, observation, action, reward, next_observation,
-                   terminal, env_info, **kwargs):
+    def add_sample(self, observation, action, reward, terminal,
+                   next_observation, **kwargs):
         self._observations[self._top] = observation
         self._actions[self._top] = action
         self._rewards[self._top] = reward
         self._terminals[self._top] = terminal
         self._next_obs[self._top] = next_observation
-
-        for key in self._env_info_keys:
-            self._env_infos[key][self._top] = env_info[key]
+        self._sparse_rewards[self._top] = kwargs['env_info'].get('sparse_reward', 0)
         self._advance()
 
     def terminate_episode(self):
-        pass
+        # store the episode beginning once the episode is over
+        # n.b. allows last episode to loop but whatever
+        self._episode_starts.append(self._cur_episode_start)
+        self._cur_episode_start = self._top
+
+    def size(self):
+        return self._size
+
+    def clear(self):
+        self._top = 0
+        self._size = 0
+        self._episode_starts = []
+        self._cur_episode_start = 0
 
     def _advance(self):
         self._top = (self._top + 1) % self._max_replay_buffer_size
         if self._size < self._max_replay_buffer_size:
             self._size += 1
 
-    def random_batch(self, batch_size):
-        indices = np.random.randint(0, self._size, batch_size)
-        batch = dict(
+    def sample_data(self, indices):
+        return dict(
             observations=self._observations[indices],
             actions=self._actions[indices],
             rewards=self._rewards[indices],
             terminals=self._terminals[indices],
             next_observations=self._next_obs[indices],
+            sparse_rewards=self._sparse_rewards[indices],
         )
-        for key in self._env_info_keys:
-            assert key not in batch.keys()
-            batch[key] = self._env_infos[key][indices]
-        return batch
 
-    def rebuild_env_info_dict(self, idx):
-        return {
-            key: self._env_infos[key][idx]
-            for key in self._env_info_keys
-        }
+    def random_batch(self, batch_size):
+        ''' batch of unordered transitions '''
+        indices = np.random.randint(0, self._size, batch_size)
+        return self.sample_data(indices)
 
-    def batch_env_info_dict(self, indices):
-        return {
-            key: self._env_infos[key][indices]
-            for key in self._env_info_keys
-        }
+    def random_sequence(self, batch_size):
+        ''' batch of trajectories '''
+        # take random trajectories until we have enough
+        i = 0
+        indices = []
+        while len(indices) < batch_size:
+            # TODO hack to not deal with wrapping episodes, just don't take the last one
+            start = np.random.choice(self.episode_starts[:-1])
+            pos_idx = self._episode_starts.index(start)
+            indices += list(range(start, self._episode_starts[pos_idx + 1]))
+            i += 1
+        # cut off the last traj if needed to respect batch size
+        indices = indices[:batch_size]
+        return self.sample_data(indices)
 
     def num_steps_can_sample(self):
         return self._size
-
-    def get_diagnostics(self):
-        return OrderedDict([
-            ('size', self._size)
-        ])

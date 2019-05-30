@@ -3,7 +3,8 @@ from collections import OrderedDict
 
 import gtimer as gt
 
-from rlkit_tf2.core import logger, eval_util
+from rlkit_tf2.core import eval_util
+from rlkit_tf2.core.logging import logger
 from rlkit_tf2.data_management.replay_buffer import ReplayBuffer
 from rlkit_tf2.samplers.data_collector import DataCollector
 

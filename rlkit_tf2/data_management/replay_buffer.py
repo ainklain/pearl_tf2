@@ -33,13 +33,10 @@ class ReplayBuffer(object, metaclass=abc.ABCMeta):
     def add_path(self, path):
         """
         Add a path to the replay buffer.
-
         This default implementation naively goes through every step, but you
         may want to optimize this.
-
         NOTE: You should NOT call "terminate_episode" after calling add_path.
         It's assumed that this function handles the episode termination.
-
         :param path: Dict like one outputted by rlkit.samplers.util.rollout
         """
         for i, (
@@ -60,19 +57,15 @@ class ReplayBuffer(object, metaclass=abc.ABCMeta):
             path["env_infos"],
         )):
             self.add_sample(
-                observation=obs,
-                action=action,
-                reward=reward,
-                next_observation=next_obs,
-                terminal=terminal,
+                obs,
+                action,
+                reward,
+                terminal,
+                next_obs,
                 agent_info=agent_info,
                 env_info=env_info,
             )
         self.terminate_episode()
-
-    def add_paths(self, paths):
-        for path in paths:
-            self.add_path(path)
 
     @abc.abstractmethod
     def random_batch(self, batch_size):
@@ -82,13 +75,3 @@ class ReplayBuffer(object, metaclass=abc.ABCMeta):
         :return:
         """
         pass
-
-    def get_diagnostics(self):
-        return {}
-
-    def get_snapshot(self):
-        return {}
-
-    def end_epoch(self, epoch):
-        return
-

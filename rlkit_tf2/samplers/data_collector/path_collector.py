@@ -1,8 +1,8 @@
 from collections import deque, OrderedDict
 
-from rlkit_tf2.envs.vae_wrapper import VAEWrappedEnv
+from rlkit_tf2.envs.vae_wrapper_x import VAEWrappedEnv
 from rlkit_tf2.core.eval_util import create_stats_ordered_dict
-from rlkit_tf2.samplers.rollout_functions import rollout, multitask_rollout
+from rlkit_tf2.samplers.rollout_functions_x import rollout, multitask_rollout
 from rlkit_tf2.samplers.data_collector.base import PathCollector
 
 

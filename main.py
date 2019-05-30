@@ -1,5 +1,5 @@
 
-from sac.layer import MLPEncoder, FlattenMLP
+from rlkit_tf2.tf2.sac.layer import MLPEncoder, FlattenMLP
 
 import os
 import pathlib

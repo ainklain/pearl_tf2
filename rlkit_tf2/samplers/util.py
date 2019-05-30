@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def rollout(env, agent, max_path_length=np.inf, render=False):
+def rollout(env, agent, max_path_length=np.inf, accum_context=True, resample_z=False, animated=False):
     """
     The following value for the following keys will be a 2D array, with the
     first dimension corresponding to the time dimension.
@@ -10,16 +10,15 @@ def rollout(env, agent, max_path_length=np.inf, render=False):
      - rewards
      - next_observations
      - terminals
-
     The next two elements will be lists of dictionaries, with the index into
     the list being the index into the time
      - agent_infos
      - env_infos
-
     :param env:
     :param agent:
     :param max_path_length:
-    :param render:
+    :param animated:
+    :param accum_context: if True, accumulate the collected context
     :return:
     """
     observations = []
@@ -31,11 +30,14 @@ def rollout(env, agent, max_path_length=np.inf, render=False):
     o = env.reset()
     next_o = None
     path_length = 0
-    if render:
+    if animated:
         env.render()
     while path_length < max_path_length:
         a, agent_info = agent.get_action(o)
         next_o, r, d, env_info = env.step(a)
+        # update the agent's current context
+        if accum_context:
+            agent.update_context([o, a, r, next_o, d, env_info])
         observations.append(o)
         rewards.append(r)
         terminals.append(d)
@@ -46,7 +48,7 @@ def rollout(env, agent, max_path_length=np.inf, render=False):
         if d:
             break
         o = next_o
-        if render:
+        if animated:
             env.render()
 
     actions = np.array(actions)
