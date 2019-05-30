@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from myrl.distribution import Distribution, Normal
+from myrl.distribution.distribution import Distribution, Normal
 import rlkit.torch.pytorch_util as ptu
 
 

@@ -3,6 +3,7 @@ import tensorflow as tf
 
 from tensorflow.keras import Model
 
+
 class PEARLAgent(Model):
     def __init__(self,
                  latent_dim,
@@ -21,9 +22,9 @@ class PEARLAgent(Model):
 
         # initialize buffers for z dist and z
         # use buffers so latent context can be saved along with model weights
-        self.register_buffer('z', tf.zeros(1, latent_dim))
-        self.register_buffer('z_means', tf.zeros(1, latent_dim))
-        self.register_buffer('z_vars', tf.zeros(1, latent_dim))
+        self.z = tf.zeros([1, self.latent_dim])
+        self.z_means = tf.zeros([1, self.latent_dim])
+        self.z_vars = tf.zeros([1, self.latent_dim])
 
         self.clear_z()
 
@@ -69,7 +70,7 @@ class PEARLAgent(Model):
 
     def compute_kl_div(self):
         ''' compute KL( q(z|c) || r(z) ) '''
-        prior = torch.distributions.Normal(ptu.zeros(self.latent_dim), ptu.ones(self.latent_dim))
+        prior = torch.distributions.Normal(tf.zeros(self.latent_dim), tf.ones(self.latent_dim))
         posteriors = [torch.distributions.Normal(mu, torch.sqrt(var)) for mu, var in zip(torch.unbind(self.z_means), torch.unbind(self.z_vars))]
         kl_divs = [torch.distributions.kl.kl_divergence(post, prior) for post in posteriors]
         kl_div_sum = torch.sum(torch.stack(kl_divs))

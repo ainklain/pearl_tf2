@@ -1,5 +1,5 @@
 
-from test_rl.base import Policy, StochasticPolicy
+from myrl.policy.base import Policy, StochasticPolicy
 from test_rl.misc import ext
 from test_rl.distribution import DiagonalGaussian
 
@@ -8,8 +8,8 @@ import tensorflow as tf
 import time
 
 from collections import OrderedDict
-from tensorflow.keras import Model
-from tensorflow.keras.layers import Dense
+from tensorflow.keras import Model, layers
+from tensorflow.keras.layers import Dense, Flatten
 
 
 class MyModel(Model):
@@ -44,6 +44,90 @@ class MyModel(Model):
         x = self.output_layer(x)
 
         return x
+
+
+class MLPBlock(layers.Layer):
+    def __init__(self,
+                 hidden_sizes,
+                 output_size,
+                 init_w=3e-3,
+                 hidden_activation='relu',
+                 output_activation='linear'):
+        super().__init__()
+        self.hidden_layers = list()
+        for i, h in enumerate(hidden_sizes):
+            self.hidden_layers.append(Dense(h, activation=hidden_activation))
+        self.output_layer = Dense(output_size,
+                                   activation=output_activation,
+                                   kernel_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w),
+                                   bias_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w))
+
+    def call(self, inputs, output_layer=True):
+        x = self.hidden_layers[0](inputs)
+        if len(self.hidden_layers) > 1:
+            for i in range(1, len(self.hidden_layers)):
+                x = self.hidden_layers[i](x)
+
+        if output_layer:
+            return self.output_layer(x)
+        else:
+            return x
+
+
+
+class FlattenMLP(layers.Layer):
+    def __init__(self, *args, **kwargs):
+        self.mlp = MLPBlock(*args, **kwargs)
+        self.flatten = Flatten()
+
+    def call(self, inputs):
+        flatten_input = self.flatten(inputs)
+        return self.mlp(flatten_input)
+
+
+class MLPPolicy(Model, Policy):
+    def __init__(self,
+                 hidden_sizes,
+                 output_size,
+                 *args,
+                 obs_normalizer=None,
+                 **kwargs):
+        super().__init__()
+        self.obs_normalizer = obs_normalizer
+
+        self.mlp = MLPBlock(hidden_sizes, output_size, *args, **kwargs)
+
+    def call(self, obs, **kwargs):
+        if self.obs_normalizer:
+            obs = self.obs_normalizer.normalize(obs)
+        return self.mlp(obs, **kwargs)
+
+    def get_action(self, obs_np):
+        actions = self.get_actions(obs_np[None])
+        return actions[0, :]
+
+    def get_actions(self, obs):
+        return self.call(obs).numpy()
+
+
+class TanhMLPPolicy(MLPPolicy):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, output_activation='tanh')
+
+
+class MLPEncoder(FlattenMLP):
+    def __init__(self):
+        super().__init__()
+
+    def reset(self, num_tasks=1):
+        pass
+
+# class RecurrentEncoder(FlattenMLP):
+#     def __init__(self, *args, **kwargs):
+#         super().__init__(*args, **kwargs)
+
+
+
 
 
 class MAMLGaussianMLPPolicy(StochasticPolicy):

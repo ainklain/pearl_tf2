@@ -1,18 +1,21 @@
 import numpy as np
 import tensorflow as tf
+from tensorflow.keras.layers import Dense
+
+
+from myrl.policy.base import ExplorationPolicy, Policy
+from myrl.policy.policy import MLPPolicy
 
 from rlkit.core.util import Wrapper
-from rlkit.policies.base import ExplorationPolicy, Policy
+
 from rlkit.torch.distributions import TanhNormal
-from rlkit.torch.networks import Mlp
-from rlkit.torch.core import np_ify
 
 
 LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
 
 
-class TanhGaussianPolicy(Mlp, ExplorationPolicy):
+class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
     """
     Usage:
     ```
@@ -41,7 +44,6 @@ class TanhGaussianPolicy(Mlp, ExplorationPolicy):
         self.save_init_params(locals())
         super().__init__(
             hidden_sizes,
-            input_size=obs_dim,
             output_size=action_dim,
             init_w=init_w,
             **kwargs
@@ -53,9 +55,9 @@ class TanhGaussianPolicy(Mlp, ExplorationPolicy):
             last_hidden_size = obs_dim
             if len(hidden_sizes) > 0:
                 last_hidden_size = hidden_sizes[-1]
-            self.last_fc_log_std = nn.Linear(last_hidden_size, action_dim)
-            self.last_fc_log_std.weight.data.uniform_(-init_w, init_w)
-            self.last_fc_log_std.bias.data.uniform_(-init_w, init_w)
+            self.last_fc_log_std = Dense(action_dim,
+                                         kernel_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w),
+                                         bias_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w))
         else:
             self.log_std = np.log(std)
             assert LOG_SIG_MIN <= self.log_std <= LOG_SIG_MAX
@@ -64,10 +66,9 @@ class TanhGaussianPolicy(Mlp, ExplorationPolicy):
         actions = self.get_actions(obs, deterministic=deterministic)
         return actions[0, :], {}
 
-    @torch.no_grad()
     def get_actions(self, obs, deterministic=False):
         outputs = self.forward(obs, deterministic=deterministic)[0]
-        return np_ify(outputs)
+        return outputs.numpy()
 
     def forward(
             self,
@@ -81,14 +82,12 @@ class TanhGaussianPolicy(Mlp, ExplorationPolicy):
         :param deterministic: If True, do not sample
         :param return_log_prob: If True, return a sample and its log probability
         """
-        h = obs
-        for i, fc in enumerate(self.fcs):
-            h = self.hidden_activation(fc(h))
-        mean = self.last_fc(h)
+
+        mean = self.mlp(obs, output_layer=True)
         if self.std is None:
-            log_std = self.last_fc_log_std(h)
-            log_std = torch.clamp(log_std, LOG_SIG_MIN, LOG_SIG_MAX)
-            std = torch.exp(log_std)
+            log_std = self.last_fc_log_std(self.mlp(obs, output_layer=False))
+            log_std = tf.clip_by_value(log_std, LOG_SIG_MIN, LOG_SIG_MAX)
+            std = tf.math.exp(log_std)
         else:
             std = self.std
             log_std = self.log_std
@@ -98,7 +97,7 @@ class TanhGaussianPolicy(Mlp, ExplorationPolicy):
         mean_action_log_prob = None
         pre_tanh_value = None
         if deterministic:
-            action = torch.tanh(mean)
+            action = tf.math.tanh(mean)
         else:
             tanh_normal = TanhNormal(mean, std)
             if return_log_prob:

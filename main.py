@@ -1,13 +1,9 @@
 
-from myrl.layer import MLPEncoder, FlattenMLP
+from sac.layer import MLPEncoder, FlattenMLP
 
 import os
 import pathlib
 import numpy as np
-import click
-import json
-import tensorflow as tf
-import gym
 
 
 class Config:
