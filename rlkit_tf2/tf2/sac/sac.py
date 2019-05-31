@@ -66,8 +66,7 @@ class PEARLSoftActorCritic(MetaRLAlgorithm):
         self.qf1, self.qf2, self.vf, self.target_vf = nets[1:]
 
         self.policy_optimizer = optimizer_class(lr=policy_lr)
-        self.qf1_optimizer = optimizer_class(lr=qf_lr)
-        self.qf2_optimizer = optimizer_class(lr=qf_lr)
+        self.qf_optimizer = optimizer_class(lr=qf_lr)
         self.vf_optimizer = optimizer_class(lr=vf_lr)
         self.context_optimizer = optimizer_class(lr=context_lr)
 
@@ -174,43 +173,42 @@ class PEARLSoftActorCritic(MetaRLAlgorithm):
         obs, actions, rewards, next_obs, terms = self.sample_data(indices)
 
         # run inference in networks
-        with tf.GradientTape() as tape:
-            policy_outputs, task_z = self.agent(obs, context)
-            new_actions, policy_mean, policy_log_std, log_pi = policy_outputs[:4]
+        with tf.GradientTape() as tape_kl:
+            with tf.GradientTape() as tape_qf:
+                policy_outputs, task_z = self.agent(obs, context)
+                new_actions, policy_mean, policy_log_std, log_pi = policy_outputs[:4]
 
-            # flattens out the task dimension
-            t, b, _ = obs.shape()
-            obs = tf.reshape(obs, [t * b, -1])
-            actions = tf.reshape(actions, [t * b, -1])
-            next_obs = tf.reshape(next_obs, [t * b, -1])
+                # flattens out the task dimension
+                t, b, _ = obs.shape
+                obs = tf.reshape(obs, [t * b, -1])
+                actions = tf.reshape(actions, [t * b, -1])
+                next_obs = tf.reshape(next_obs, [t * b, -1])
 
-            # Q and V networks
-            # encoder will only get gradients from Q nets
-            q1_pred = self.qf1(obs, actions, task_z)
-            q2_pred = self.qf2(obs, actions, task_z)
-            v_pred = self.vf(obs, tf.stop_gradient(task_z))
-            # get targets for use in V and Q updates
-            target_v_values = tf.stop_gradient(self.target_vf(next_obs, task_z))
+                # Q and V networks
+                # encoder will only get gradients from Q nets
+                q1_pred = self.qf1(obs, actions, task_z)
+                q2_pred = self.qf2(obs, actions, task_z)
+                v_pred = self.vf(obs, tf.stop_gradient(task_z))
+                # get targets for use in V and Q updates
+                target_v_values = tf.stop_gradient(self.target_vf(next_obs, task_z))
 
-            # KL constraint on z if probabilistic
-            if self.use_information_bottleneck:
-                kl_div = self.agent.compute_kl_div()
-                kl_loss = self.kl_lambda * kl_div
+                # KL constraint on z if probabilistic
+                if self.use_information_bottleneck:
+                    kl_div = self.agent.compute_kl_div()
+                    kl_loss = self.kl_lambda * kl_div
 
-            # qf and encoder update (note encoder does not get grads from policy or vf)
-            rewards_flat = tf.reshape(rewards, [self.batch_size * num_tasks, -1])
-            # scale rewards for Bellman update
-            rewards_flat = rewards_flat * self.reward_scale
-            terms_flat = tf.reshape(terms, [self.batch_size * num_tasks, -1])
-            q_target = rewards_flat + (1. - terms_flat) * self.discount * target_v_values
-            qf_loss = tf.reduce_mean((q1_pred - q_target) ** 2) + tf.reduce_mean((q2_pred - q_target) ** 2)
+                # qf and encoder update (note encoder does not get grads from policy or vf)
+                rewards_flat = tf.reshape(rewards, [self.batch_size * num_tasks, -1])
+                # scale rewards for Bellman update
+                rewards_flat = rewards_flat * self.reward_scale
+                terms_flat = tf.reshape(terms, [self.batch_size * num_tasks, -1])
+                q_target = rewards_flat + (1. - terms_flat) * self.discount * target_v_values
+                qf_loss = tf.reduce_mean((q1_pred - q_target) ** 2) + tf.reduce_mean((q2_pred - q_target) ** 2)
 
-        grad_kl_loss = tape.gradient(kl_loss, self.agent.context_encoder.trainable_variables)
-        grad_qf1_loss = tape.gradient(qf_loss, self.qf1.trainable_variables)
-        grad_qf2_loss = tape.gradient(qf_loss, self.qf2.trainable_variables)
+        grad_kl_loss = tape_kl.gradient(kl_loss, self.agent.context_encoder.trainable_variables)
+        grad_qf_loss = tape_qf.gradient(qf_loss, self.qf1.trainable_variables + self.qf2.trainable_variables)
 
-        self.qf1_optimizer.apply_gradients(zip(grad_qf1_loss, self.qf1.trainable_variables))
-        self.qf2_optimizer.apply_gradients(zip(grad_qf2_loss, self.qf1.trainable_variables))
+        self.qf_optimizer.apply_gradients(zip(grad_qf_loss, self.qf1.trainable_variables + self.qf2.trainable_variables))
         self.context_optimizer.apply_graident(zip(grad_kl_loss, self.agent.context_encoder.trainable_variables))
 
 
