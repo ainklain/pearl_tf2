@@ -5,6 +5,31 @@ import tensorflow as tf
 from tensorflow.keras import layers, losses
 
 
+class LayerNorm(layers.Layer):
+    def __init__(self, n_features, center=True, scale=False, eps=1e-6):
+        super().__init__()
+        self.center = center
+        self.scale = scale
+        self.eps = eps
+        if self.scale:
+            self.scale_param = tf.ones(n_features)
+        else:
+            self.center_param = None
+        if self.center:
+            self.center_param = tf.zeros(n_features)
+        else:
+            self.center_param = None
+
+    def call(self, x):
+        mean = tf.math.reduce_mean(x, axis=-1, keepdims=True)
+        std = tf.math.reduce_std(x, axis=-1, keepdims=True)
+        output = (x - mean) / (std + self.eps)
+        if self.scale:
+            output = output * self.scale_param
+        if self.center:
+            output = output + self.center_param
+        return output
+
 
 # class HuberLoss(layers.Layer):
 #     def __init__(self, delta=1):

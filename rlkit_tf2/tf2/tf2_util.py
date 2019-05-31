@@ -31,6 +31,14 @@ def filter_batch(np_batch):
         else:
             yield k, v
 
+def np_to_tf2_batch(np_batch):
+    return {
+        k: elem_or_tuple_to_variable(x)
+        for k, x in filter_batch(np_batch)
+        if x.dtype != np.dtype('O')  # ignore object (e.g. dictionaries)
+    }
+
+
 
 def fanin_init(inputs):
     size = inputs.shape()

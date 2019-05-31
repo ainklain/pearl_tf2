@@ -3,10 +3,11 @@ import tensorflow as tf
 from tensorflow.keras.layers import Dense
 
 
-from myrl.policy.base import ExplorationPolicy, Policy
-from myrl.policy.policy import MLPPolicy
+from rlkit_tf2.policies.base import ExplorationPolicy, Policy
+from rlkit_tf2.tf2.networks import MLP
 
 from rlkit_tf2.core.util import Wrapper
+from rlkit_tf2.tf2.core import np_ify
 
 from myrl.distribution.distribution import TanhNormal
 
@@ -15,7 +16,7 @@ LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
 
 
-class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
+class TanhGaussianPolicy(MLP, ExplorationPolicy):
     """
     Usage:
     ```
@@ -41,9 +42,10 @@ class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
             init_w=1e-3,
             **kwargs
     ):
-        self.save_init_params(locals())
-        super().__init__(
+        # self.save_init_params(locals())
+        super(TanhGaussianPolicy, self).__init__(
             hidden_sizes,
+            input_size=obs_dim,
             output_size=action_dim,
             init_w=init_w,
             **kwargs
@@ -67,10 +69,10 @@ class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
         return actions[0, :], {}
 
     def get_actions(self, obs, deterministic=False):
-        outputs = self.forward(obs, deterministic=deterministic)[0]
-        return outputs.numpy()
+        outputs = self.call(obs, deterministic=deterministic)[0]
+        return np_ify(outputs)
 
-    def forward(
+    def call(
             self,
             obs,
             reparameterize=False,
@@ -83,9 +85,12 @@ class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
         :param return_log_prob: If True, return a sample and its log probability
         """
 
-        mean = self.mlp(obs, output_layer=True)
+        x = obs
+        for hidden_layer in self.hidden_layers:
+            x = hidden_layer(x)
+        mean = self.output_layer(x)
         if self.std is None:
-            log_std = self.last_fc_log_std(self.mlp(obs, output_layer=False))
+            log_std = self.last_fc_log_std(x)
             log_std = tf.clip_by_value(log_std, LOG_SIG_MIN, LOG_SIG_MAX)
             std = tf.math.exp(log_std)
         else:
@@ -113,7 +118,7 @@ class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
                     action,
                     pre_tanh_value=pre_tanh_value
                 )
-                log_prob = log_prob.sum(dim=1, keepdim=True)
+                log_prob = tf.reduce_sum(log_prob, axis=1, keepdims=True)
             else:
                 if reparameterize:
                     action = tanh_normal.rsample()
@@ -128,7 +133,7 @@ class TanhGaussianPolicy(MLPPolicy, ExplorationPolicy):
 
 class MakeDeterministic(Wrapper, Policy):
     def __init__(self, stochastic_policy):
-        super().__init__(stochastic_policy)
+        super(MakeDeterministic, self).__init__(stochastic_policy)
         self.stochastic_policy = stochastic_policy
 
     def get_action(self, observation):

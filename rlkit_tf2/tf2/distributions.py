@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-from myrl.distribution.distribution import Distribution, Normal
+from tensorflow_probability.python.distributions import Distribution, Normal
 
 
 class TanhNormal(Distribution):

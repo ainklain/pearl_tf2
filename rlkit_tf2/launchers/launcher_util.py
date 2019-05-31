@@ -12,7 +12,6 @@ import numpy as np
 
 from rlkit_tf2.core import logger
 from rlkit_tf2.launchers import config
-from rlkit_tf2.torch.pytorch_util import set_gpu_mode
 
 GitInfo = namedtuple('GitInfo', ['code_diff', 'commit_hash', 'branch_name'])
 
@@ -147,7 +146,6 @@ def run_experiment_here(
     )
 
     set_seed(seed)
-    set_gpu_mode(use_gpu)
 
     run_experiment_here_kwargs = dict(
         variant=variant,

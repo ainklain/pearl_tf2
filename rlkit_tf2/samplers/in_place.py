@@ -1,7 +1,7 @@
 import numpy as np
 
 from rlkit_tf2.samplers.util import rollout
-from rlkit_tf2.torch.sac.policies import MakeDeterministic
+from rlkit_tf2.tf2.sac.policies import MakeDeterministic
 
 
 class InPlacePathSampler(object):
@@ -41,7 +41,7 @@ class InPlacePathSampler(object):
             path = rollout(
                 self.env, policy, max_path_length=self.max_path_length, accum_context=accum_context)
             # save the latent context that generated this trajectory
-            path['context'] = policy.z.detach().cpu().numpy()
+            path['context'] = policy.z.numpy()
             paths.append(path)
             n_steps_total += len(path['observations'])
             n_trajs += 1

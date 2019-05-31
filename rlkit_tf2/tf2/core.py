@@ -2,14 +2,15 @@ import abc
 import numpy as np
 
 import tensorflow as tf
-from tensorflow.keras import Model
 from tensorflow import Variable
 
 import rlkit_tf2.tf2.tf2_util as tfu
 from rlkit_tf2.core.serializable import Serializable
 
 
-class TF2Module(Model, Serializable, metaclass=abc.ABCMeta):
+class TF2Module(Serializable, metaclass=abc.ABCMeta):
+    def __init__(self):
+        super(TF2Module, self).__init__()
 
     def get_param_values(self):
         return self.get_weights()
@@ -77,9 +78,9 @@ class TF2Module(Model, Serializable, metaclass=abc.ABCMeta):
         replaced with numpy equivalents.
         Assumes the output is either a single object or a tuple of objects.
         """
-        torch_args = tuple(tf2_ify(x) for x in args)
-        torch_kwargs = {k: tf2_ify(v) for k, v in kwargs.items()}
-        outputs = self.__call__(*torch_args, **torch_kwargs)
+        tf2_args = tuple(tf2_ify(x) for x in args)
+        tf2_kwargs = {k: tf2_ify(v) for k, v in kwargs.items()}
+        outputs = self.__call__(*tf2_args, **tf2_kwargs)
         if isinstance(outputs, tuple):
             return tuple(np_ify(x) for x in outputs)
         else:

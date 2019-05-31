@@ -19,8 +19,10 @@ def register_env(name):
     return register_env_fn
 
 
-# automatically import any envs in the envs/ directory
-for file in os.listdir(os.path.dirname(__file__)):
-    if file.endswith('.py') and not file.startswith('_'):
-        module = file[:file.find('.py')]
-        importlib.import_module('rlkit_tf2.envs.' + module)
+importlib.import_module('rlkit_tf2.envs.point_robot')
+
+# # automatically import any envs in the envs/ directory
+# for file in os.listdir(os.path.dirname(__file__)):
+#     if file.endswith('.py') and not file.startswith('_'):
+#         module = file[:file.find('.py')]
+#         importlib.import_module('rlkit_tf2.envs.' + module)

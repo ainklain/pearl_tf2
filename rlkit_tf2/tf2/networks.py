@@ -2,9 +2,12 @@
 General networks for pytorch.
 Algorithm-specific networks should go else-where.
 """
+
+from tf_additional.normalization import LayerNormalization
+
 import tensorflow as tf
-import tensorflow.keras.layers as layers
-from tensorflow.keras.layers import Dense, LayerNormalization
+from tensorflow.keras import layers, activations, Model
+from tensorflow.keras.layers import Dense, LSTM
 
 from rlkit_tf2.policies.base import Policy
 from rlkit_tf2.tf2 import tf2_util as tfu
@@ -17,112 +20,89 @@ def identity(x):
     return x
 
 
-class MLPBlock(layers.Layer):
+class DenseWithLayerNorm(layers.Layer):
+    def __init__(self, *args, layer_norm=True, activation=activations.relu, **kwargs):
+        super().__init__()
+        self.layer_norm = layer_norm
+        self.layer = Dense(*args, activation='linear', **kwargs)
+        self.layer_normalization = LayerNormalization()
+        self.activation = activation
+
+    def call(self, x):
+        x = self.layer(x)
+        if self.layer_norm:
+            x = self.layer_normalization(x)
+        return self.activation(x)
+
+
+class MLP(Model, TF2Module):
     def __init__(self,
                  hidden_sizes,
                  output_size,
+                 input_size,
                  init_w=3e-3,
-                 hidden_activation='relu',
-                 output_activation='linear',
-                 hidden_init=tfu.fanin_init,
+                 hidden_activation=activations.relu,
+                 output_activation=activations.linear,
+                 hidden_init='glorot_uniform',
                  b_init_value=0.1,
                  layer_norm=False,
-                 layer_norm_kwargs=None,
+                 **kwargs
                  ):
-        super().__init__()
-        self.hidden_layers = list()
-        for i, h in enumerate(hidden_sizes):
-            self.hidden_layers.append(Dense(h, activation=hidden_activation))
-        self.output_layer = Dense(output_size,
-                                   activation=output_activation,
-                                   kernel_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w),
-                                   bias_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w))
-
-    def call(self, inputs, output_layer=True):
-        x = self.hidden_layers[0](inputs)
-        if len(self.hidden_layers) > 1:
-            for i in range(1, len(self.hidden_layers)):
-                x = self.hidden_layers[i](x)
-
-        if output_layer:
-            return self.output_layer(x)
-        else:
-            return x
-
-
-class Mlp(TF2Module):
-    def __init__(
-            self,
-            hidden_sizes,
-            output_size,
-            input_size,
-            init_w=3e-3,
-            hidden_activation=F.relu,
-            output_activation=identity,
-            hidden_init=ptu.fanin_init,
-            b_init_value=0.1,
-            layer_norm=False,
-            layer_norm_kwargs=None,
-    ):
-        self.save_init_params(locals())
-        super().__init__()
-
-        if layer_norm_kwargs is None:
-            layer_norm_kwargs = dict()
+        super(MLP, self).__init__(**kwargs)
+        # self.save_init_params(locals())
 
         self.input_size = input_size
         self.output_size = output_size
         self.hidden_sizes = hidden_sizes
-        self.hidden_activation = hidden_activation
+        self.hidden_layers = list()
+
+        for i, h in enumerate(hidden_sizes):
+            if i < len(hidden_sizes) - 1:
+                add_layer_norm = layer_norm
+            else:
+                add_layer_norm = False
+
+            self.hidden_layers.append(
+                DenseWithLayerNorm(h,
+                                   layer_norm=add_layer_norm,
+                                   activation=hidden_activation,
+                                   kernel_initializer=hidden_init,
+                                   bias_initializer=tf.keras.initializers.Constant(b_init_value))
+            )
+
+        self.output_layer = Dense(output_size,
+                                   activation='linear',
+                                   kernel_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w),
+                                   bias_initializer=tf.keras.initializers.RandomUniform(-init_w, init_w))
         self.output_activation = output_activation
-        self.layer_norm = layer_norm
-        self.fcs = []
-        self.layer_norms = []
-        in_size = input_size
 
-        for i, next_size in enumerate(hidden_sizes):
-            fc = nn.Linear(in_size, next_size)
-            in_size = next_size
-            hidden_init(fc.weight)
-            fc.bias.data.fill_(b_init_value)
-            self.__setattr__("fc{}".format(i), fc)
-            self.fcs.append(fc)
+    def call(self, inputs, return_preactivations=False, output_layer=True):
+        x = inputs
+        for hidden_layer in self.hidden_layers:
+            x = hidden_layer(x)
 
-            if self.layer_norm:
-                ln = LayerNorm(next_size)
-                self.__setattr__("layer_norm{}".format(i), ln)
-                self.layer_norms.append(ln)
-
-        self.last_fc = nn.Linear(in_size, output_size)
-        self.last_fc.weight.data.uniform_(-init_w, init_w)
-        self.last_fc.bias.data.uniform_(-init_w, init_w)
-
-    def forward(self, input, return_preactivations=False):
-        h = input
-        for i, fc in enumerate(self.fcs):
-            h = fc(h)
-            if self.layer_norm and i < len(self.fcs) - 1:
-                h = self.layer_norms[i](h)
-            h = self.hidden_activation(h)
-        preactivation = self.last_fc(h)
-        output = self.output_activation(preactivation)
-        if return_preactivations:
-            return output, preactivation
+        if output_layer:
+            preactivation = self.output_layer(x)
+            out = self.output_activation(preactivation)
+            if return_preactivations:
+                return out, preactivation
+            else:
+                return out
         else:
-            return output
+            return x
 
 
-class FlattenMlp(Mlp):
+class FlattenMLP(MLP):
     """
     if there are multiple inputs, concatenate along dim 1
     """
 
-    def forward(self, *inputs, **kwargs):
-        flat_inputs = torch.cat(inputs, dim=1)
-        return super().forward(flat_inputs, **kwargs)
+    def call(self, *inputs, **kwargs):
+        flat_inputs = tf.concat(inputs, axis=1)
+        return super().call(flat_inputs, **kwargs)
 
 
-class MlpPolicy(Mlp, Policy):
+class MLPPolicy(MLP, Policy):
     """
     A simpler interface for creating policies.
     """
@@ -130,17 +110,17 @@ class MlpPolicy(Mlp, Policy):
     def __init__(
             self,
             *args,
-            obs_normalizer: TorchFixedNormalizer = None,
+            obs_normalizer=None,
             **kwargs
     ):
-        self.save_init_params(locals())
-        super().__init__(*args, **kwargs)
+        # self.save_init_params(locals())
+        super(MLPPolicy, self).__init__(*args, **kwargs)
         self.obs_normalizer = obs_normalizer
 
-    def forward(self, obs, **kwargs):
+    def call(self, obs, **kwargs):
         if self.obs_normalizer:
             obs = self.obs_normalizer.normalize(obs)
-        return super().forward(obs, **kwargs)
+        return super().call(obs, **kwargs)
 
     def get_action(self, obs_np):
         actions = self.get_actions(obs_np[None])
@@ -150,16 +130,16 @@ class MlpPolicy(Mlp, Policy):
         return self.eval_np(obs)
 
 
-class TanhMlpPolicy(MlpPolicy):
+class TanhMLPPolicy(MLPPolicy):
     """
     A helper class since most policies have a tanh output activation.
     """
     def __init__(self, *args, **kwargs):
         self.save_init_params(locals())
-        super().__init__(*args, output_activation=torch.tanh, **kwargs)
+        super(TanhMLPPolicy, self).__init__(*args, output_activation=activations.tanh, **kwargs)
 
 
-class MlpEncoder(FlattenMlp):
+class MLPEncoder(FlattenMLP):
     '''
     encode context via MLP
     '''
@@ -168,7 +148,7 @@ class MlpEncoder(FlattenMlp):
         pass
 
 
-class RecurrentEncoder(FlattenMlp):
+class RecurrentEncoder(FlattenMLP):
     '''
     encode context via recurrent network
     '''
@@ -177,38 +157,54 @@ class RecurrentEncoder(FlattenMlp):
                  *args,
                  **kwargs
     ):
-        self.save_init_params(locals())
-        super().__init__(*args, **kwargs)
+        # self.save_init_params(locals())
+        super(RecurrentEncoder, self).__init__(*args, **kwargs)
         self.hidden_dim = self.hidden_sizes[-1]
-        self.register_buffer('hidden', torch.zeros(1, 1, self.hidden_dim))
+        self.hidden = tf.zeros([1, 1, self.hidden_dim])
 
         # input should be (task, seq, feat) and hidden should be (task, 1, feat)
 
-        self.lstm = nn.LSTM(self.hidden_dim, self.hidden_dim, num_layers=1, batch_first=True)
+        self.lstm = LSTM(self.hidden_dim, self.hidden_dim, num_layers=1, batch_first=True)
 
-    def forward(self, in_, return_preactivations=False):
+    def call(self, inputs, return_preactivations=False):
         # expects inputs of dimension (task, seq, feat)
-        task, seq, feat = in_.size()
-        out = in_.view(task * seq, feat)
+        task, seq, feat = inputs.shape()
+        out = tf.reshape(inputs, [task * seq, feat])
 
-        # embed with MLP
-        for i, fc in enumerate(self.fcs):
-            out = fc(out)
-            out = self.hidden_activation(out)
+        for hidden_layer in self.hidden_layers:
+            out = hidden_layer(out)
 
-        out = out.view(task, seq, -1)
+        out = tf.reshape(out, [task, seq, -1])
         out, (hn, cn) = self.lstm(out, (self.hidden, torch.zeros(self.hidden.size()).to(ptu.device)))
         self.hidden = hn
         # take the last hidden state to predict z
         out = out[:, -1, :]
 
-        # output layer
-        preactivation = self.last_fc(out)
-        output = self.output_activation(preactivation)
+        preactivation = self.output_layer(out)
+        out = self.output_activation(preactivation)
         if return_preactivations:
-            return output, preactivation
+            return out, preactivation
         else:
-            return output
+            return out
+
+        # embed with MLP
+        # for i, fc in enumerate(self.fcs):
+        #     out = fc(out)
+        #     out = self.hidden_activation(out)
+        #
+        # out = out.view(task, seq, -1)
+        # out, (hn, cn) = self.lstm(out, (self.hidden, torch.zeros(self.hidden.size()).to(ptu.device)))
+        # self.hidden = hn
+        # # take the last hidden state to predict z
+        # out = out[:, -1, :]
+        #
+        # # output layer
+        # preactivation = self.last_fc(out)
+        # output = self.output_activation(preactivation)
+        # if return_preactivations:
+        #     return output, preactivation
+        # else:
+        #     return output
 
     def reset(self, num_tasks=1):
         self.hidden = self.hidden.new_full((1, num_tasks, self.hidden_dim), 0)
