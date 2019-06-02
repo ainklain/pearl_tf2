@@ -101,21 +101,6 @@ def main():
         meta_batch = 64
         indices = np.random.choice(train_tasks, meta_batch)
 
-    # # optionally load pre-trained weights
-    # if variant['path_to_weights'] is not None:
-    #     path = variant['path_to_weights']
-    #     context_encoder.load_state_dict(torch.load(os.path.join(path, 'context_encoder.pth')))
-    #     qf1.load_state_dict(torch.load(os.path.join(path, 'qf1.pth')))
-    #     qf2.load_state_dict(torch.load(os.path.join(path, 'qf2.pth')))
-    #     vf.load_state_dict(torch.load(os.path.join(path, 'vf.pth')))
-    #     # TODO hacky, revisit after model refactor
-    #     algorithm.networks[-2].load_state_dict(torch.load(os.path.join(path, 'target_vf.pth')))
-    #     policy.load_state_dict(torch.load(os.path.join(path, 'policy.pth')))
-    #
-    # # optional GPU mode
-    # ptu.set_gpu_mode(variant['util_params']['use_gpu'], variant['util_params']['gpu_id'])
-    # if ptu.gpu_enabled():
-    #     algorithm.to()
 
     # debugging triggers a lot of printing and logs to a debug directory
     DEBUG = variant['util_params']['debug']
@@ -133,3 +118,20 @@ def main():
 
     # run the algorithm
     algorithm.train()
+
+    # # optionally load pre-trained weights
+    # if variant['path_to_weights'] is not None:
+    #     path = variant['path_to_weights']
+    #     context_encoder.load_state_dict(torch.load(os.path.join(path, 'context_encoder.pth')))
+    #     qf1.load_state_dict(torch.load(os.path.join(path, 'qf1.pth')))
+    #     qf2.load_state_dict(torch.load(os.path.join(path, 'qf2.pth')))
+    #     vf.load_state_dict(torch.load(os.path.join(path, 'vf.pth')))
+    #     # TODO hacky, revisit after model refactor
+    #     algorithm.networks[-2].load_state_dict(torch.load(os.path.join(path, 'target_vf.pth')))
+    #     policy.load_state_dict(torch.load(os.path.join(path, 'policy.pth')))
+    #
+    # # optional GPU mode
+    # ptu.set_gpu_mode(variant['util_params']['use_gpu'], variant['util_params']['gpu_id'])
+    # if ptu.gpu_enabled():
+    #     algorithm.to()
+

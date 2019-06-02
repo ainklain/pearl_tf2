@@ -17,6 +17,7 @@ import pickle
 import base64
 import errno
 import torch
+import pickle
 
 from rlkit_tf2.core.tabulate import tabulate
 
@@ -58,7 +59,7 @@ def _add_output(file_name, arr, fds, mode='a'):
     if file_name not in arr:
         mkdir_p(os.path.dirname(file_name))
         arr.append(file_name)
-        fds[file_name] = open(file_name, mode)
+        fds[file_name] = open(file_name, mode, encoding='utf-8')
 
 
 def _remove_output(file_name, arr, fds):
@@ -133,8 +134,8 @@ def log(s, with_prefix=True, with_timestamp=True):
     if with_prefix:
         out = _prefix_str + out
     if with_timestamp:
-        now = datetime.datetime.now(dateutil.tz.tzlocal())
-        timestamp = now.strftime('%Y-%m-%d %H:%M:%S.%f %Z')
+        now = datetime.datetime.now()
+        timestamp = now.strftime('%Y-%m-%d %H:%M:%S')
         out = "%s | %s" % (timestamp, out)
     if not _log_tabular_only:
         # Also log to stdout
@@ -251,7 +252,7 @@ def save_weights(weights, names):
     ''' save network weights to given paths '''
     # NOTE: breaking abstraction by adding torch dependence here
     for w, n in zip(weights, names):
-        torch.save(w, n)
+        w.save_weights(n)
 
 def save_itr_params(itr, params_dict):
     ''' snapshot model parameters '''

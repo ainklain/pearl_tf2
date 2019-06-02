@@ -148,10 +148,7 @@ class MetaRLAlgorithm(metaclass=abc.ABCMeta):
         self._current_path_builder = PathBuilder()
 
         # at each iteration, we first collect data from tasks, perform meta-updates, then try to evaluate
-        for it_ in gt.timed_for(
-                range(self.num_iterations),
-                save_itrs=True,
-        ):
+        for it_ in gt.timed_for(range(self.num_iterations), save_itrs=True,):
             self._start_epoch(it_)
             self.training_mode(True)
             if it_ == 0:
@@ -215,9 +212,9 @@ class MetaRLAlgorithm(metaclass=abc.ABCMeta):
         num_transitions = 0
         while num_transitions < num_samples:
             paths, n_samples = self.sampler.obtain_samples(max_samples=num_samples - num_transitions,
-                                                                max_trajs=update_posterior_rate,
-                                                                accum_context=False,
-                                                                resample=resample_z_rate)
+                                                           max_trajs=update_posterior_rate,
+                                                           accum_context=False,
+                                                           resample=resample_z_rate)
             num_transitions += n_samples
             self.replay_buffer.add_paths(self.task_idx, paths)
             if add_to_enc_buffer:

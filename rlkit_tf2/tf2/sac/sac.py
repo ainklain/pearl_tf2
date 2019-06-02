@@ -173,72 +173,72 @@ class PEARLSoftActorCritic(MetaRLAlgorithm):
         obs, actions, rewards, next_obs, terms = self.sample_data(indices)
 
         # run inference in networks
-        with tf.GradientTape() as tape_kl:
-            with tf.GradientTape() as tape_qf:
-                policy_outputs, task_z = self.agent(obs, context)
-                new_actions, policy_mean, policy_log_std, log_pi = policy_outputs[:4]
+        with tf.GradientTape() as tape_vf:
+            with tf.GradientTape() as tape_kl:
+                with tf.GradientTape() as tape_qf:
+                    with tf.GradientTape() as tape_policy:
+                        policy_outputs, task_z = self.agent(obs, context)
+                        new_actions, policy_mean, policy_log_std, log_pi = policy_outputs[:4]
 
-                # flattens out the task dimension
-                t, b, _ = obs.shape
-                obs = tf.reshape(obs, [t * b, -1])
-                actions = tf.reshape(actions, [t * b, -1])
-                next_obs = tf.reshape(next_obs, [t * b, -1])
+                        # flattens out the task dimension
+                        t, b, _ = obs.shape
+                        obs = tf.reshape(obs, [t * b, -1])
+                        actions = tf.reshape(actions, [t * b, -1])
+                        next_obs = tf.reshape(next_obs, [t * b, -1])
 
-                # Q and V networks
-                # encoder will only get gradients from Q nets
-                q1_pred = self.qf1(obs, actions, task_z)
-                q2_pred = self.qf2(obs, actions, task_z)
-                v_pred = self.vf(obs, tf.stop_gradient(task_z))
-                # get targets for use in V and Q updates
-                target_v_values = tf.stop_gradient(self.target_vf(next_obs, task_z))
+                        # Q and V networks
+                        # encoder will only get gradients from Q nets
+                        q1_pred = self.qf1(obs, actions, task_z)
+                        q2_pred = self.qf2(obs, actions, task_z)
+                        v_pred = self.vf(obs, tf.stop_gradient(task_z))
+                        # get targets for use in V and Q updates
+                        target_v_values = tf.stop_gradient(self.target_vf(next_obs, task_z))
 
-                # KL constraint on z if probabilistic
-                if self.use_information_bottleneck:
-                    kl_div = self.agent.compute_kl_div()
-                    kl_loss = self.kl_lambda * kl_div
+                        # KL constraint on z if probabilistic
+                        if self.use_information_bottleneck:
+                            kl_div = self.agent.compute_kl_div()
+                            kl_loss = self.kl_lambda * kl_div
 
-                # qf and encoder update (note encoder does not get grads from policy or vf)
-                rewards_flat = tf.reshape(rewards, [self.batch_size * num_tasks, -1])
-                # scale rewards for Bellman update
-                rewards_flat = rewards_flat * self.reward_scale
-                terms_flat = tf.reshape(terms, [self.batch_size * num_tasks, -1])
-                q_target = rewards_flat + (1. - terms_flat) * self.discount * target_v_values
-                qf_loss = tf.reduce_mean((q1_pred - q_target) ** 2) + tf.reduce_mean((q2_pred - q_target) ** 2)
+                        # qf and encoder update (note encoder does not get grads from policy or vf)
+                        rewards_flat = tf.reshape(rewards, [self.batch_size * num_tasks, -1])
+                        # scale rewards for Bellman update
+                        rewards_flat = rewards_flat * self.reward_scale
+                        terms_flat = tf.reshape(terms, [self.batch_size * num_tasks, -1])
+                        q_target = rewards_flat + (1. - terms_flat) * self.discount * target_v_values
+                        qf_loss = tf.reduce_mean((q1_pred - q_target) ** 2) + tf.reduce_mean((q2_pred - q_target) ** 2)
+
+                        # compute min Q on the new actions
+                        min_q_new_actions = self._min_q(obs, new_actions, task_z)
+
+                        # vf update
+                        v_target = min_q_new_actions - log_pi
+                        vf_loss = self.vf_criterion(v_pred, tf.stop_gradient(v_target))
+
+                        # policy update
+                        # n.b. policy update includes dQ/da
+                        log_policy_target = min_q_new_actions
+
+                        policy_loss = tf.reduce_mean(log_pi - log_policy_target)
+
+                        mean_reg_loss = self.policy_mean_reg_weight * tf.reduce_mean(policy_mean ** 2)
+                        std_reg_loss = self.policy_std_reg_weight * tf.reduce_mean(policy_log_std ** 2)
+                        pre_tanh_value = policy_outputs[-1]
+                        pre_activation_reg_loss = self.policy_pre_activation_weight * tf.reduce_mean(
+                            tf.reduce_sum(pre_tanh_value**2, axis=1))
+                        policy_reg_loss = mean_reg_loss + std_reg_loss + pre_activation_reg_loss
+                        policy_loss = policy_loss + policy_reg_loss
 
         grad_kl_loss = tape_kl.gradient(kl_loss, self.agent.context_encoder.trainable_variables)
         grad_qf_loss = tape_qf.gradient(qf_loss, self.qf1.trainable_variables + self.qf2.trainable_variables)
 
         self.qf_optimizer.apply_gradients(zip(grad_qf_loss, self.qf1.trainable_variables + self.qf2.trainable_variables))
-        self.context_optimizer.apply_graident(zip(grad_kl_loss, self.agent.context_encoder.trainable_variables))
+        self.context_optimizer.apply_gradients(zip(grad_kl_loss, self.agent.context_encoder.trainable_variables))
 
-
-        # compute min Q on the new actions
-        with tf.GradientTape() as tape:
-            min_q_new_actions = self._min_q(obs, new_actions, task_z)
-
-            # vf update
-            v_target = min_q_new_actions - log_pi
-            vf_loss = self.vf_criterion(v_pred, tf.stop_gradient(v_target))
-        grad_vf_loss = tape.gradient(vf_loss, self.vf.trainable_variables)
-        self.vf_optimizer.apply_gradient(zip(grad_vf_loss, self.vf.trainable_variables))
+        grad_vf_loss = tape_vf.gradient(vf_loss, self.vf.trainable_variables)
+        self.vf_optimizer.apply_gradients(zip(grad_vf_loss, self.vf.trainable_variables))
         self._update_target_network()
 
-        # policy update
-        # n.b. policy update includes dQ/da
-        with tf.GradientTape() as tape:
-            log_policy_target = min_q_new_actions
-
-            policy_loss = tf.reduce_mean(log_pi - log_policy_target)
-
-            mean_reg_loss = self.policy_mean_reg_weight * tf.reduce_mean(policy_mean ** 2)
-            std_reg_loss = self.policy_std_reg_weight * tf.reduce_mean(policy_log_std ** 2)
-            pre_tanh_value = policy_outputs[-1]
-            pre_activation_reg_loss = self.policy_pre_activation_weight * tf.reduce_mean(
-                tf.reduce_sum(pre_tanh_value**2, axis=1))
-            policy_reg_loss = mean_reg_loss + std_reg_loss + pre_activation_reg_loss
-            policy_loss = policy_loss + policy_reg_loss
-
-        grad_policy_loss = tape.gradient(policy_loss, self.agent.policy.trainable_variables)
+        grad_policy_loss = tape_policy.gradient(policy_loss, self.agent.policy.trainable_variables)
         self.policy_optimizer.apply_gradients(zip(grad_policy_loss, self.agent.policy.trainable_variables))
 
         # save some statistics for eval
@@ -281,11 +281,19 @@ class PEARLSoftActorCritic(MetaRLAlgorithm):
     def get_epoch_snapshot(self, epoch):
         # NOTE: overriding parent method which also optionally saves the env
         snapshot = OrderedDict(
-            qf1=self.qf1.get_weights(),
-            qf2=self.qf2.get_weights(),
-            policy=self.agent.policy.get_weights(),
-            vf=self.vf.get_weights(),
-            target_vf=self.target_vf.get_weights(),
-            context_encoder=self.agent.context_encoder.get_weights(),
+            qf1=self.qf1,
+            qf2=self.qf2,
+            policy=self.agent.policy,
+            vf=self.vf,
+            target_vf=self.target_vf,
+            context_encoder=self.agent.context_encoder,
         )
+        # snapshot = OrderedDict(
+        #     qf1=self.qf1.get_weights(),
+        #     qf2=self.qf2.get_weights(),
+        #     policy=self.agent.policy.get_weights(),
+        #     vf=self.vf.get_weights(),
+        #     target_vf=self.target_vf.get_weights(),
+        #     context_encoder=self.agent.context_encoder.get_weights(),
+        # )
         return snapshot
