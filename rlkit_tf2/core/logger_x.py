@@ -16,7 +16,6 @@ import json
 import pickle
 import base64
 import errno
-import torch
 import pickle
 
 from rlkit_tf2.core.tabulate import tabulate

@@ -16,7 +16,6 @@ import json
 import tensorflow as tf
 
 
-
 def deep_update_dict(fr, to):
     ''' update dict of dicts with new values '''
     # assume dicts have same keys

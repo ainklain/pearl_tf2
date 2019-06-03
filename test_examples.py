@@ -17,3 +17,18 @@ dist.prob([0, 1.5])
 
 # Get 3 samples, returning a 3 x 2 tensor.
 dist.sample([3])
+
+
+
+import tensorflow as tf
+x = tf.Variable([1., 0.2])
+with tf.GradientTape(persistent=True) as tape:
+    y = x * x
+    # z = x + y
+    z = x + tf.stop_gradient(y)
+
+grad = tape.gradient(z, x)
+grad2 = tape.gradient(z, y)
+grad3 = tape.gradient(y, x)
+print(grad, grad2, grad3)
+del tape
