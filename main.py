@@ -134,3 +134,5 @@ def main():
     # if ptu.gpu_enabled():
     #     algorithm.to()
 
+if __name__ == '__main__':
+    main()
