@@ -9,8 +9,8 @@ from rlkit_tf2.tf2.networks import MLP
 from rlkit_tf2.core.util import Wrapper
 from rlkit_tf2.tf2.core import np_ify
 
-from myrl.distribution.distribution import TanhNormal
-
+# from myrl.distribution.distribution import TanhNormal
+from rlkit_tf2.tf2.distributions import TanhNormal
 
 LOG_SIG_MAX = 2
 LOG_SIG_MIN = -20
